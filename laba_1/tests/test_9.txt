@@ -1,0 +1,33 @@
+Tabular datasets are ubiquitous across many industries, especially in vital sectors such as healthcare and finance. Such
+industrial datasets often contain sensitive information, raising
+privacy and confidentiality issues that preclude their public release and limit their analysis to methods that are compatible
+with an appropriate anonymization process. We can distinguish between two types of tabular data: static tabular data
+that corresponds to independent rows in a table, and dynamic
+tabular data that corresponds to tabular time series, also referred to also as multivariate time series. The machine learning and deep learning communities have devoted considerable
+effort to learning from static tabular data, as well as generating synthetic static tabular data that can be released as a privacy compliant surrogate of the original data. On the other
+hand, less effort has been devoted to the more challenging
+dynamic case, where it is important to also account for the
+temporal component of the data. The purpose of this paper is
+to remedy this gap by proposing deep learning techniques to:
+1) learn useful representation of tabular time series that can be
+used in downstream tasks such as classification or regression
+and 2) generate realistic synthetic tabular time series.
+Tabular time series represent a hierarchical structure that
+we leverage by endowing transformer-based language models with field-level transformers, which encode individual
+rows into embeddings that are in turn treated as embedded
+tokens that are passed to BERT [1]. This results in an alternative architectures for tabular time series encoding that can
+be pre-trained end-to-end for representation learning that we
+call Tabular BERT (TabBERT). Another important contribution is adapting state-of-the-art (SOTA) language generative
+models GPT [2] to produce realistic synthetic tabular data
+that we call Tabular GPT (TabGPT). A key ingredient of our
+language metaphor in modeling tabular time series is the
+quantization of continuous fields, so that each field is defined
+on a finite vocabulary, as in language modeling.
+As mentioned, static tabular data have been widely analyzed in the past, typically with feature engineering and classical learning schemes such as gradient boosting or random
+forests. Recently, [3] introduced TabNet, which uses attention
+to perform feature selection across fields and shows the advantages of deep learning over classical approaches. A more
+recent line of work [4, 5] concurrent to ours, deals with the
+joint processing of static tabular and textual data using transformer architectures, such as BERT, with the goal of querying
+tables with natural language. These works consider the static
+case, and to the best of our knowledge, our work is the first to
+address tabular time series using transformers.
