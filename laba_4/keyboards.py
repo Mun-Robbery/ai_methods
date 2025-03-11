@@ -1,22 +1,11 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from typing import List
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
+from config import MODELS
 
-def get_model_selection_keyboard() -> InlineKeyboardMarkup:
-    """Create keyboard for model selection."""
-    keyboard = [
-        [
-            InlineKeyboardButton("Llama 3.2", callback_data="model_llama"),
-            InlineKeyboardButton("GPT-Neo", callback_data="model_gpt-neo")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
+def get_model_keyboard():
+    """Создаёт клавиатуру для выбора модели"""
+    keyboard = [[model] for model in MODELS.keys()]
+    return ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
 
-def get_after_response_keyboard() -> InlineKeyboardMarkup:
-    """Create keyboard for actions after response."""
-    keyboard = [
-        [
-            InlineKeyboardButton("New Request", callback_data="new_request"),
-            InlineKeyboardButton("Change Model", callback_data="change_model")
-        ]
-    ]
-    return InlineKeyboardMarkup(keyboard)
+def remove_keyboard():
+    """Удаляет клавиатуру"""
+    return ReplyKeyboardRemove()
