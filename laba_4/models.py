@@ -1,41 +1,34 @@
-from typing import Dict, Optional
-import aiohttp
-from config import BotConfig
+# models.py
+from huggingface_hub import InferenceClient
+import asyncio
+from config import HF_API_KEY, DEFAULT_PARAMS
 
-class ModelManager:
-    """Manager class for handling interactions with language models."""
-    
-    def __init__(self, config: BotConfig):
-        """
-        Initialize ModelManager with configuration.
+client = InferenceClient(token=HF_API_KEY)
+
+SYSTEM_PROMPT = """Ты профессиональный поэт-рифмоплёт. Сгенерируй 3 креативные рифмы для слова, которое предоставит пользователь. 
+Рифмы должны быть творческими и использовать различные стили. Формат ответа:
+1. [Рифма 1] - [краткое объяснение]
+2. [Рифма 2] - [пояснение]
+3. [Рифма 3] - [пояснение]
+
+Слово для рифмовки: """
+
+async def generate_response(model: dict, message: str) -> str:
+    """Генерация рифм через Hugging Face API"""
+    try:
+        full_prompt = SYSTEM_PROMPT + message.strip()
+        params = {**DEFAULT_PARAMS, **model.get("parameters", {})}
         
-        Args:
-            config: Bot configuration containing tokens and URLs
-        """
-        self.config = config
-        self.headers = {"Authorization": f"Bearer {config.hf_token}"}
-
-    async def generate_response(self, model_name: str, prompt: str) -> Optional[str]:
-        """
-        Generate response from specified model.
-        
-        Args:
-            model_name: Name of the model to use
-            prompt: Input prompt for the model
-            
-        Returns:
-            Generated text or None if request failed
-        """
-        if model_name not in self.config.model_urls:
-            return None
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                self.config.model_urls[model_name],
-                headers=self.headers,
-                json={"inputs": prompt}
-            ) as response:
-                if response.status != 200:
-                    return None
-                result = await response.json()
-                return result[0].get("generated_text", "Error generating response")
+        response = await asyncio.to_thread(
+            client.text_generation,
+            prompt=full_prompt,
+            model=model["model_name"],
+            max_new_tokens=params["max_new_tokens"],
+            temperature=params["temperature"],
+            top_k=params["top_k"],
+            repetition_penalty=params["repetition_penalty"],
+            do_sample=True
+        )
+        return response
+    except Exception as e:
+        raise Exception(f"Ошибка генерации: {str(e)}")
