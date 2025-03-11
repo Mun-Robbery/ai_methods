@@ -1,161 +1,84 @@
-import asyncio
-import logging
-from typing import Dict, Optional
-
 from telegram import Update
 from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
+    ApplicationBuilder,
     ContextTypes,
+    CommandHandler,
+    MessageHandler,
     filters
 )
+from config import MODELS, TG_TOKEN
+from keyboards import get_model_keyboard, remove_keyboard
+from models import generate_response
 
-from config import load_config
-from models import ModelManager
-from keyboards import get_model_selection_keyboard, get_after_response_keyboard
-# Configure logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /start"""
+    await update.message.reply_text(
+        "Выберите модель для диалога:",
+        reply_markup=get_model_keyboard()
+    )
 
-# Global state storage
-user_states: Dict[int, Dict[str, str]] = {}
-
-class TelegramBot:
-    """Main bot class handling all Telegram interactions."""
+async def handle_model_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    model_name = update.message.text
+    if model_name not in MODELS:
+        await update.message.reply_text("Пожалуйста, выберите модель из предложенных вариантов")
+        return
     
-    def __init__(self):
-        """Initialize bot with configuration and model manager."""
-        self.config = load_config()
-        self.model_manager = ModelManager(self.config)
+    # Сохраняем конфигурацию модели
+    context.user_data["model_config"] = MODELS[model_name]
+    await update.message.reply_text(
+        f"✅ Модель {model_name} выбрана!\n"
+        f"Параметры генерации:\n"
+        f"• Температура: {context.user_data['model_config']['parameters']['temperature']}\n"
+        f"• Top-K: {context.user_data['model_config']['parameters']['top_k']}\n"
+        f"• Штраф повторов: {context.user_data['model_config']['parameters']['repetition_penalty']}\n\n"
+        "Отправьте мне слово для генерации рифм!",
+        reply_markup=remove_keyboard()
+    )
 
-    async def start_command(
-        self,
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """
-        Handle /start command.
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if "model_config" not in context.user_data:
+        await update.message.reply_text("❌ Сначала выберите модель через /start")
+        return
+    
+    await context.bot.send_chat_action(
+        chat_id=update.effective_chat.id, 
+        action="typing"
+    )
+    
+    try:
+        print(context.user_data["model_config"])
+        response = await generate_response(
+            model=context.user_data["model_config"],
+            message=update.message.text
+        )
+        await update.message.reply_text(f"🎯 Рифмы для слова '{update.message.text}':\n\n{response}")
         
-        Args:
-            update: Incoming update
-            context: Callback context
-        """
         await update.message.reply_text(
-            "Welcome! Please select a model to use:",
-            reply_markup=get_model_selection_keyboard()
+            "Выберите модель для нового запроса:",
+            reply_markup=get_model_keyboard()
         )
+        context.user_data.pop("model_config", None)
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Ошибка: {str(e)}")
 
-    async def handle_model_selection(
-        self,
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """
-        Handle model selection callback.
-        
-        Args:
-            update: Incoming update
-            context: Callback context
-        """
-        query = update.callback_query
-        await query.answer()
-        
-        model_name = query.data.replace("model_", "")
-        user_states[query.from_user.id] = {"model": model_name}
-        
-        await query.edit_message_text(
-            f"Selected model: {model_name}\nPlease enter your prompt:"
-        )
+def main():
+    # Создаем приложение бота
+    application = ApplicationBuilder()\
+        .token(TG_TOKEN)\
+        .concurrent_updates(True)\
+        .build()
 
-    async def handle_message(
-        self,
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """
-        Handle user messages and generate responses.
-        
-        Args:
-            update: Incoming update
-            context: Callback context
-        """
-        user_id = update.message.from_user.id
-        if user_id not in user_states:
-            await update.message.reply_text(
-                "Please select a model first:",
-                reply_markup=get_model_selection_keyboard()
-            )
-            return
+    # Регистрируем обработчики
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(
+        MessageHandler(filters.Regex(f"^({'|'.join(MODELS.keys())})$"), handle_model_selection)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
+    )
 
-        #prompt = f'Find rhymes for the following word or phrase: {update.message.text}. Rhymes:'
-        prompt = f'The five words that rhyme with the word {update.message.text} are:'
-
-        model = user_states[user_id]["model"]
-        
-        response = await self.model_manager.generate_response(model, prompt)
-        if response:
-            await update.message.reply_text(
-                f"Response:\n{response}",
-                reply_markup=get_after_response_keyboard()
-            )
-        else:
-            await update.message.reply_text(
-                "Error generating response. Please try again.",
-                reply_markup=get_model_selection_keyboard()
-            )
-
-    async def handle_after_response(
-        self,
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        """
-        Handle actions after response generation.
-        
-        Args:
-            update: Incoming update
-            context: Callback context
-        """
-        query = update.callback_query
-        await query.answer()
-        
-        if query.data == "new_request":
-            await query.edit_message_text(
-                "Please enter your new prompt:"
-            )
-        else:  # change_model
-            await query.edit_message_text(
-                "Please select a new model:",
-                reply_markup=get_model_selection_keyboard()
-            )
-
-    def run(self) -> None:
-        """Start the bot."""
-        application = Application.builder().token(self.config.tg_token).build()
-
-        # Add handlers
-        application.add_handler(CommandHandler("start", self.start_command))
-        application.add_handler(CallbackQueryHandler(
-            self.handle_model_selection,
-            pattern="^model_"
-        ))
-        application.add_handler(CallbackQueryHandler(
-            self.handle_after_response,
-            pattern="^(new_request|change_model)$"
-        ))
-        application.add_handler(MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            self.handle_message
-        ))
-
-        # Start the bot
-        application.run_polling()
+    # Запускаем бота
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    bot = TelegramBot()
-    bot.run()
+    main()
