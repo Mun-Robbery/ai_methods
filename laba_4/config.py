@@ -1,25 +1,34 @@
 # config.py
-from dataclasses import dataclass
-from typing import Dict
 from environs import Env
 
-@dataclass
-class BotConfig:
-    """Configuration class for bot tokens and API endpoints."""
-    tg_token: str
-    hf_token: str
-    model_urls: Dict[str, str]
+env = Env()
+env.read_env()
 
-def load_config() -> BotConfig:
-    """Load configuration from environment variables."""
-    env = Env()
-    env.read_env()
+HF_API_KEY = env.str("HUGGINGFACE_TOKEN")
+TG_TOKEN = env.str("TELEGRAM_TOKEN")
 
-    return BotConfig(
-        tg_token=env.str("TELEGRAM_TOKEN"),
-        hf_token=env.str("HUGGINGFACE_TOKEN"),
-        model_urls={
-            "llama": "https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B",
-            "gpt-neo": "https://api-inference.huggingface.co/models/EleutherAI/gpt-neo-2.7B"
+MODELS = {
+    "Llama 2": {
+        "model_name": "meta-llama/Llama-3.2-1B",
+        "parameters": {
+            "temperature": 0.7,
+            "top_k": 50,
+            "repetition_penalty": 1.8
         }
-    )
+    },
+    "Rugpt3": {
+        "model_name": "ai-forever/rugpt3medium_based_on_gpt2",
+        "parameters": {
+            "temperature": 0.5,
+            "top_k": 30,
+            "repetition_penalty": 1.9
+        }
+    }
+}
+
+DEFAULT_PARAMS = {
+    "temperature": 0.7,
+    "top_k": 50,
+    "repetition_penalty": 1.1,
+    "max_new_tokens": 500
+}
